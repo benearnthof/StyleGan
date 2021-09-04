@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 # img_path = "C:/Users/Bene/PycharmProjects/StyleGAN/dataset_corgis/corgis_25k/5h8XwMyMdr.jpeg"
 
-dataset_path = "C:/Users/Bene/PycharmProjects/StyleGAN/dataset_corgis/"
+dataset_path = "D:/Downloads/crop1024/"
 out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
 
 
@@ -65,7 +65,15 @@ def to_lmdb(transaction, dataset, max_size=128, min_size=8):
 dataset = ImageFolder(root=dataset_path)
 maxsize = 128
 minsize = 8
+# how to adjust the needed size of the database dynamically?
+# trial and error: starting off with 25k images and a map_size of
+# 128 ** 4 * 3 leads to 24958 elements being written.
+# for all 136255 images we need approx:
+# 128 ** 4 * (137000 / (24950/3)) = 128 ** 4 ** 17
 
-with lmdb.open(path=out_path, map_size=maxsize ** 4, readahead=False) as env:
+mapsize = (maxsize ** 4) * 17 # black magic
+# the final database will require about 4.5 GB of disk space
+
+with lmdb.open(path=out_path, map_size=mapsize, readahead=False) as env:
     with env.begin(write=True) as txn:
         to_lmdb(txn, dataset, maxsize, minsize)
