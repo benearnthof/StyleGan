@@ -7,5 +7,6 @@
 # todo: training loop
 # todo: interpolation
 # todo: FID scores
-#
+# todo: wrap everything in parsable files for training through CLI
+
 # todo: rerun training & finalize writeup

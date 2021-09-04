@@ -20,12 +20,13 @@ def power(x):
     return 1 + power(x / 2)
 
 
-# we need multiple sizes so we write to memory first before converting to jpgs all at once
+# we need multiple sizes so we write to memory first before converting to jpgs
+# all at once
 # https://stackoverflow.com/questions/646286/how-to-write-png-image-to-string-with-the-pil
 def resize(img_path, max_size=128, min_size=8, quality=100):
     image = Image.open(img_path)
-
-    sizes = list(map(lambda x: 2 ** x, range(power(max_size) + 1)))  # range starts at 0
+    # range(x) starts at 0 and ends at x-1
+    sizes = list(map(lambda x: 2 ** x, range(power(max_size) + 1)))
     sizes = [x for x in sizes if x >= min_size]
     ret = []
 
