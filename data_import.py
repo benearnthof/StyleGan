@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 
 
 class MultiResolutionDataset(Dataset):
-    def __init__(self, path, resolution=8):
+    def __init__(self, path, transform, resolution=8):
         self.env = lmdb.open(path, max_readers=32, readonly=True, lock=False,
                              readahead=False, meminit=False,
         )
@@ -23,7 +23,7 @@ class MultiResolutionDataset(Dataset):
             self.length = int(txn.get('length'.encode('utf-8')).decode('utf-8'))
 
         self.resolution = resolution
-        # self.transform = transform
+        self.transform = transform
 
     def __len__(self):
         return self.length
@@ -35,11 +35,13 @@ class MultiResolutionDataset(Dataset):
 
         buffer = BytesIO(img_bytes)
         img = Image.open(buffer)
-        # img = self.transform(img)
+        img = self.transform(img)
 
         return img
 
 
+out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
+test = MultiResolutionDataset(out_path, transform= transforms.RandomHorizontalFlip(), resolution=128)
+test[0].show()
 
-# test = MultiResolutionDataset(out_path, resolution=128)
-# test[0].show()
+# everything seems to work so far, lets look at the dataloader
