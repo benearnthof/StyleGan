@@ -16,7 +16,7 @@ transform = transforms.Compose(
     )
 
 dataset = MultiResolutionDataset(out_path, transform=transform, resolution=128)
-F.to_pil_image(dataset[0]).show()
+# F.to_pil_image(dataset[0]).show()
 
 def dataloader(dataset, batch_size, resolution = 128):
     dataset.resolution = resolution
@@ -34,4 +34,4 @@ def getimg(data_loader):
     img = F.to_pil_image(img.squeeze(0))
     return img
 
-getimg(loader).show()
+# getimg(loader).show()
