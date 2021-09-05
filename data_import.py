@@ -40,8 +40,8 @@ class MultiResolutionDataset(Dataset):
         return img
 
 
-out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
-test = MultiResolutionDataset(out_path, transform= transforms.RandomHorizontalFlip(), resolution=128)
-test[0].show()
+# out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
+# test = MultiResolutionDataset(out_path, transform= transforms.RandomHorizontalFlip(), resolution=128)
+# test[0].show()
 
 # everything seems to work so far, lets look at the dataloader
