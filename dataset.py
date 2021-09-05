@@ -5,6 +5,7 @@ from io import BytesIO
 import lmdb
 from torchvision.datasets import ImageFolder
 from tqdm import tqdm
+# from math import frexp
 
 # img_path = "C:/Users/Bene/PycharmProjects/StyleGAN/dataset_corgis/corgis_25k/5h8XwMyMdr.jpeg"
 
@@ -13,12 +14,37 @@ out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
 
 
 # function to convert pixel number inputs to their corresponding powers of 2
-def power(x):
-    assert x % 2 == 0
-    if x <= 2:
-        return 1
-    return 1 + power(x / 2)
+# def power(x):
+#     assert x % 2 == 0
+#     if x <= 2:
+#         return 1
+#     return 1 + power(x / 2)
 
+def fast_log2(x):
+    assert isinstance(x, int)
+    return x.bit_length() - 1
+
+# def power3(x):
+#     return frexp(x)[1] - 1
+#
+# # lets see which function is fastest
+# def timereps(reps, func, args):
+#     from time import time
+#     start = time()
+#     for i in range(0, reps):
+#         func(args)
+#     end = time()
+#     return (end - start)
+#
+# t1 = timereps(10000000, power, 1024)
+# t2 = timereps(10000000, power2, 1024)
+# t3 = timereps(10000000, power3, 1024)
+# t1, t2, t3
+# # 20 seconds, 1.42 seconds and 2.18 seconds respectively
+# # we should use the second function
+# sizes = list(map(lambda x: 2 ** x, range(power(512) + 1)))
+# sizes2 = list(map(lambda x: 2 ** x, range(power2(512) + 1)))
+# sizes3 = list(map(lambda x: 2 ** x, range(power3(512) + 1)))
 
 # we need multiple sizes so we write to memory first before converting to jpgs
 # all at once
@@ -26,7 +52,7 @@ def power(x):
 def resize(img_path, max_size=128, min_size=8, quality=100):
     image = Image.open(img_path)
     # range(x) starts at 0 and ends at x-1
-    sizes = list(map(lambda x: 2 ** x, range(power(max_size) + 1)))
+    sizes = list(map(lambda x: 2 ** x, range(fast_log2(max_size) + 1)))
     sizes = [x for x in sizes if x >= min_size]
     ret = []
 
@@ -72,6 +98,7 @@ minsize = 8
 # for all 136255 images we need approx:
 # 128 ** 4 * (137000 / (24950/3)) = 128 ** 4 ** 17
 
+# needs to be adjusted relative to the original data set size.
 mapsize = (maxsize ** 4) * 17 # black magic
 # the final database will require about 4.5 GB of disk space
 
