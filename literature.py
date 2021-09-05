@@ -7,8 +7,10 @@
 # todo: interpolation => colab
 # todo: FID scores => colab
 # todo: wrap everything in parsable files for training through CLI
+# todo: tests
 
 # todo: rerun training & finalize writeup
 
 # making convolutional networks shift invariant again https://arxiv.org/abs/1904.11486
 # progressive growing of GANs https://arxiv.org/pdf/1710.10196.pdf
+# deconvolutional networks http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.232.4023&rep=rep1&type=pdf

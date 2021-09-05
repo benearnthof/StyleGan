@@ -1,14 +1,14 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.autograd import Function
+# from torch.autograd import Function
 import numpy as np
 
-import random
-from math import sqrt
+# import random
 from dataloader import dataloader
 from data_import import MultiResolutionDataset
-import torchvision.transforms.functional as visF
+from torchvision import transforms
+# import torchvision.transforms.functional as visF
 
 out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
 transform = transforms.Compose(
@@ -23,7 +23,7 @@ dataset = MultiResolutionDataset(out_path, transform=transform, resolution=128)
 
 loader = dataloader(dataset, 1, 128)
 x = next(loader)
-x.shape
+print(x.shape)
 # 4 dimensional tensor: batch, channels, x, y
 
 #https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L22
@@ -49,8 +49,9 @@ x.shape
 #     f = torch.from_numpy(f.copy())
 
 # lets rewrite as a nn.Module
-class blur2d(nn.Module):
+class Blur(nn.Module):
     def __init__(self, channel):
+        # channel is the number of channels in the image => 1 for greyscale imgs
         super().__init__()
         f = np.array([1,2,1], dtype = np.float32)
         f = np.outer(f,f)
@@ -66,14 +67,53 @@ class blur2d(nn.Module):
 
     def forward(self, input):
         return F.conv2d(input, self.weight, padding = 1, groups=input.shape[1])
+        # consider swapping this with the changes proposed in rosinality implementation
 
-blur = blur2d(3)
-blurtest = blur(x)
-blurtest = blurtest.squeeze(0)
-blurtest = visF.to_pil_image(blurtest)
-blurtest.show()
+# blur = blur2d(3)
+# blurtest = blur(x)
+# blurtest = blurtest.squeeze(0)
+# blurtest = visF.to_pil_image(blurtest)
+# blurtest.show()
 # seems to work
 
+# upscale2d_conv2d:
+# https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L174
+# both operations are combined in the original implementation to save memory and speed up performance
+# https://github.com/rosinality/style-based-gan-pytorch/blob/b01ffcdcbca6d8bcbc5eb402c5d8180f4921aae4/model.py#L56
+
+class FusedUpsample(nn.Module):
+    def __init__(self, in_channel, out_channel, kernel_size, padding = 0):
+        super().__init__()
+        w = torch.randn(in_channel, out_channel, kernel_size, kernel_size)
+        bias = torch.zeros(out_channel)
+        # get weight https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L135
+        fan_in = kernel_size * kernel_size * in_channel
+        he_std = np.sqrt(2) / np.sqrt(fan_in) # He initialization
+        self.multiplier = he_std
+        self.w = nn.Parameter(w)
+        self.bias = nn.Parameter(bias)
+        self.pad = padding
+
+    def forward(self, input):
+        # pad last 2 dimensions with 0 on each side => turn 1x1x3x3 to 1x1x5x5
+        w = F.pad(self.w * self.multiplier, [1,1,1,1])
+        # compare to https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L188
+        # add weights element wise
+        w = (w[:, :, 1:, 1:] + w[:, :, :-1, 1:] + w[:, :, 1:, :-1]+ w[:, :, :-1, :-1]) * 0.25
+        # original implementation performs "deconvolution" http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.232.4023&rep=rep1&type=pdf
+        out = F.conv_transpose2d(input, w, self.bias, stride = 2, padding = self.pad)
+        return out
+
+# upsamp = FusedUpsample(3,3,3, padding = 1)
+# print(x.shape)
+# test = upsamp(x)
+# print(test.shape)
+# # displaying to check if the output makes sense
+# from utils import display_tensor
+# display_tensor(test)
+# # seems good
+
+# fused downsample works just the same way but we use a convolution with stride 2
 
 
 # https://arxiv.org/abs/1710.10196
