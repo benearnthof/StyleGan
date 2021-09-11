@@ -7,6 +7,7 @@
 # todo: FID scores => colab
 # todo: wrap everything in parsable files for training through CLI
 # todo: tests
+# todo: requirements.txt
 
 # todo: rerun training & finalize writeup
 
