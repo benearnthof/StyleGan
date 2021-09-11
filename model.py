@@ -13,21 +13,23 @@ from math import sqrt
 
 out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
 transform = transforms.Compose(
-        [
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(), # data loader needs tensors, arrays etc.
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True),
-        ]
-    )
+    [
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),  # data loader needs tensors, arrays etc.
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True),
+    ]
+)
 
 dataset = MultiResolutionDataset(out_path, transform=transform, resolution=128)
 
 loader = dataloader(dataset, 1, 128)
 x = next(loader)
 print(x.shape)
+
+
 # 4 dimensional tensor: batch, channels, x, y
 
-#https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L22
+# https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L22
 # def blur2d(x, f = [1,2,1], normalize = True, flip = False, stride = 1):
 #     assert x.shape.__len__() == 4 and all(dim is not None for dim in x.shape[1:])
 #     assert isinstance(stride, int) and stride >= 1
@@ -54,21 +56,22 @@ class Blur(nn.Module):
     def __init__(self, channel):
         # channel is the number of channels in the image => 1 for greyscale imgs
         super().__init__()
-        f = np.array([1,2,1], dtype = np.float32)
-        f = np.outer(f,f)
+        f = np.array([1, 2, 1], dtype=np.float32)
+        f = np.outer(f, f)
         f /= np.sum(f)
         f = f[np.newaxis, np.newaxis, :, :]
         f = torch.from_numpy(f.copy())
-        f_flip = torch.flip(f, [2,3])
+        f_flip = torch.flip(f, [2, 3])
         # f and f_flip are not learnable parameters
         # https://pytorch.org/docs/1.1.0/nn.html#torch.nn.Module.register_buffer
         # https://github.com/rosinality/style-based-gan-pytorch/blob/b01ffcdcbca6d8bcbc5eb402c5d8180f4921aae4/model.py#L174
-        self.register_buffer("weight", f.repeat(channel, 1,1,1))
-        self.register_buffer("weight_flip", f_flip.repeat(channel, 1,1,1))
+        self.register_buffer("weight", f.repeat(channel, 1, 1, 1))
+        self.register_buffer("weight_flip", f_flip.repeat(channel, 1, 1, 1))
 
     def forward(self, input):
-        return F.conv2d(input, self.weight, padding = 1, groups=input.shape[1])
+        return F.conv2d(input, self.weight, padding=1, groups=input.shape[1])
         # consider swapping this with the changes proposed in rosinality implementation
+
 
 # blur = blur2d(3)
 # blurtest = blur(x)
@@ -83,13 +86,13 @@ class Blur(nn.Module):
 # https://github.com/rosinality/style-based-gan-pytorch/blob/b01ffcdcbca6d8bcbc5eb402c5d8180f4921aae4/model.py#L56
 
 class FusedUpsample(nn.Module):
-    def __init__(self, in_channel, out_channel, kernel_size, padding = 0):
+    def __init__(self, in_channel, out_channel, kernel_size, padding=0):
         super().__init__()
         w = torch.randn(in_channel, out_channel, kernel_size, kernel_size)
         b = torch.zeros(out_channel)
         # get weight https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L135
         fan_in = kernel_size * kernel_size * in_channel
-        he_std = np.sqrt(2) / np.sqrt(fan_in) # He initialization
+        he_std = np.sqrt(2) / np.sqrt(fan_in)  # He initialization
         self.multiplier = he_std
         # weight and bias are learnable parameters
         self.w = nn.Parameter(w)
@@ -98,13 +101,14 @@ class FusedUpsample(nn.Module):
 
     def forward(self, input):
         # pad last 2 dimensions with 0 on each side => turn 1x1x3x3 to 1x1x5x5
-        w = F.pad(self.w * self.multiplier, [1,1,1,1])
+        w = F.pad(self.w * self.multiplier, [1, 1, 1, 1])
         # compare to https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L188
         # add weights element wise
         w = (w[:, :, 1:, 1:] + w[:, :, :-1, 1:] + w[:, :, 1:, :-1] + w[:, :, :-1, :-1]) * 0.25
         # original implementation performs "deconvolution" http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.232.4023&rep=rep1&type=pdf
-        out = F.conv_transpose2d(input, w, self.b, stride = 2, padding = self.pad)
+        out = F.conv_transpose2d(input, w, self.b, stride=2, padding=self.pad)
         return out
+
 
 # upsamp = FusedUpsample(3,3,3, padding = 1)
 # print(x.shape)
@@ -130,11 +134,12 @@ class FusedDownsample(nn.Module):
         self.pad = padding
 
     def forward(self, input):
-        w = F.pad(self.w * self.multiplier, [1,1,1,1])
+        w = F.pad(self.w * self.multiplier, [1, 1, 1, 1])
         w = (w[:, :, 1:, 1:] + w[:, :, :-1, 1:] + w[:, :, 1:, :-1] + w[:, :, :-1, :-1]) * 0.25
         # do a regular convolution with stride 2 to downsample
         out = F.conv2d(input, w, self.b, stride=2, padding=self.pad)
         return out
+
 
 # lets test if we return the correct shape
 # downsamp = FusedDownsample(3,3,3,1)
@@ -206,6 +211,7 @@ def equal_lr(module, name='weight'):
 
     return module
 
+
 # Wrappers for linear & conv layers with equal_lr applied to them
 # https://github.com/rosinality/style-based-gan-pytorch/blob/b01ffcdcbca6d8bcbc5eb402c5d8180f4921aae4/model.py#L182
 
@@ -235,6 +241,7 @@ class EqualLinear(nn.Module):
     def forward(self, input):
         return self.linear(input)
 
+
 # leaky_relu https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L223
 # has already been implemented for us in torch.nn.functional
 
@@ -246,9 +253,10 @@ class PixelNorm(nn.Module):
 
     def forward(self, input):
         # reciprocal square root
-        out = input * torch.rsqrt(torch.mean(torch.square(input), dim = 1,
-                                             keepdim = True) + 1e-8)
+        out = input * torch.rsqrt(torch.mean(torch.square(input), dim=1,
+                                             keepdim=True) + 1e-8)
         return out
+
 
 # test_pxnorm = torch.randn(3,3)
 # pxnorm = PixelNorm()
@@ -286,6 +294,7 @@ class AdaptiveInstanceNorm(nn.Module):
 
         return out
 
+
 # Style Modulation is performed at the end of every layer
 # the original implementation applies the style vector bias to the respective feature maps
 # of the input. This is equivalent with the lrequalized AdaIn defined above.
@@ -311,6 +320,7 @@ class NoiseInjection(nn.Module):
         assert len(input.shape) == 4
         return input + self.w + noise
 
+
 # test = ApplyNoise(3)
 # out = test(x, noise = 0)
 # print(torch.equal(x, out))
@@ -329,12 +339,14 @@ class NoiseInjection(nn.Module):
 # https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L507
 
 class ConstantInput(nn.Module):
-    def __init__(self, channel, size = 4):
+    def __init__(self, channel, size=4):
         super().__init__()
         self.w = nn.Parameter(torch.randn(1, channel, size, size))
+
     def forward(self, input):
         # batch, 512, 4, 4
         return self.w.repeat(input.shape[0], 1, 1, 1)
+
 
 # test = ConstantInput(nf(1))
 # out = test(x)
@@ -345,6 +357,8 @@ class ConstantInput(nn.Module):
 # https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L602
 def block(x, res):
     pass
+
+
 # the original function splits the problem in 2 cases: 4x4 and everything else
 # if 8x8 an above:
 # x = activation(apply_bias(conv2d(input, nf(res-1), 3, gain, w_scale)
@@ -353,7 +367,8 @@ def block(x, res):
 # conv block used in the discriminator
 class ConvBlock(nn.Module):
     def __init__(self, in_channel, out_channel, kernel_size, padding,
-                 kernel_size2=None, padding2=None, downsample=False, fused=False):
+                 kernel_size2=None, padding2=None, downsample=False,
+                 fused=False):
         # fused is always true
         super().__init__()
         pad1, pad2 = padding, padding
@@ -382,13 +397,15 @@ class ConvBlock(nn.Module):
             if fused:
                 self.conv2 = nn.Sequential(
                     Blur(out_channel),
-                    FusedDownsample(out_channel, out_channel, kernel2, padding = pad2),
+                    FusedDownsample(out_channel, out_channel, kernel2,
+                                    padding=pad2),
                     nn.LeakyReLU(0.2)
                 )
             else:
                 self.conv2 = nn.Sequential(
                     Blur(out_channel),
-                    EqualConv2d(out_channel, out_channel, kernel2, padding = pad2),
+                    EqualConv2d(out_channel, out_channel, kernel2,
+                                padding=pad2),
                     # the original implementation uses average pooling here
                     # https://github.com/NVlabs/stylegan/blob/03563d18a0cf8d67d897cc61e44479267968716b/training/networks_progan.py#L107
                     # with a kernel of [1, 1, 2, 2]
@@ -409,6 +426,7 @@ class ConvBlock(nn.Module):
         out = self.conv2(out)
         return out
 
+
 # print(x.shape)
 # convtest = ConvBlock(3, 3, 3, 1, downsample=False, fused=True)
 # out = convtest(x)
@@ -423,4 +441,68 @@ class ConvBlock(nn.Module):
 # print(out.shape) # torch.Size([1, 3, 64, 64])
 #
 # torch.allclose(out, out2) # false
+# display_tensor(out)
+# display_tensor(out2)
+# display_tensor(x)
 
+# the main component of the generator
+# https://github.com/rosinality/style-based-gan-pytorch/blob/b01ffcdcbca6d8bcbc5eb402c5d8180f4921aae4/model.py#L310
+class StyledConvBlock(nn.Module):
+    def __init__(self, in_channel, out_channel, kernel_size=3, padding=1,
+                 style_dim=512, initial=False, upsample=False, fused=False):
+        super().__init__()
+
+        if initial:
+            # https://github.com/NVlabs/stylegan/blob/03563d18a0cf8d67d897cc61e44479267968716b/training/networks_stylegan.py#L504
+            self.conv1 = ConstantInput(in_channel)
+        else:
+            if upsample:
+                if fused:
+                    self.conv1 = nn.Sequential(
+                        FusedUpsample(
+                            in_channel, out_channel, kernel_size, padding=padding
+                        ),
+                        Blur(out_channel),
+                    )
+                else:
+                    self.conv1 = nn.Sequential(
+                        nn.Upsample(scale_factor=2, mode='nearest'),
+                        EqualConv2d(
+                            in_channel, out_channel, kernel_size,
+                            padding=padding
+                        ),
+                        Blur(out_channel),
+                    )
+            else:
+                self.conf1 = EqualConv2d(
+                    in_channel, out_channel, kernel_size, padding=padding
+                )
+        self.noise1 = equal_lr(NoiseInjection(out_channel))
+        self.adain1 = AdaptiveInstanceNorm(out_channel, style_dim)
+        self.lrelu1 = nn.LeakyReLU(0.2)
+
+        self.conv2 = EqualConv2d(out_channel, out_channel, kernel_size, padding=padding)
+        self.noise2 = equal_lr(NoiseInjection(out_channel))
+        self.adain2 = AdaptiveInstanceNorm(out_channel, style_dim)
+        self.lrelu2 = nn.LeakyReLU(0.2)
+
+    def forward(self, input, style, noise):
+        # refer to Figure 1: https://arxiv.org/pdf/1812.04948.pdf
+        # upsample & conv
+        out = self.conv1(input)
+        # add noise (we generate noise separately)
+        out = self.noise1(out, noise)
+        # pass through activation function `act` in original implementation
+        # https://github.com/NVlabs/stylegan/blob/03563d18a0cf8d67d897cc61e44479267968716b/training/networks_stylegan.py#L602
+        out = self.lrelu1(out)
+        # add style through AdaIN
+        out = self.adain1(out, style)
+        # regular conv
+        out = self.conv2(out)
+        # add noise
+        out = self.noise2(out)
+        # pass through activation function again
+        out = self.lrelu2(out)
+        # add style again
+        out = self.adain2(out, style)
+        return out

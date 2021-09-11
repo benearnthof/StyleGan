@@ -1,6 +1,5 @@
 # general notes and literature
 
-# todo: utils
 # todo: generator
 # todo: discriminator
 # todo: training loop
