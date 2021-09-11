@@ -338,5 +338,89 @@ class ConstantInput(nn.Module):
 
 # test = ConstantInput(nf(1))
 # out = test(x)
-# print(out.shape)
+# print(out.shape) # torch.Size([1, 512, 4, 4])
 # works as intended
+
+# Building Blocks:
+# https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L602
+def block(x, res):
+    pass
+# the original function splits the problem in 2 cases: 4x4 and everything else
+# if 8x8 an above:
+# x = activation(apply_bias(conv2d(input, nf(res-1), 3, gain, w_scale)
+# with leaky relu as activation function and lr-equalized conv2d as defined above
+
+# conv block used in the discriminator
+class ConvBlock(nn.Module):
+    def __init__(self, in_channel, out_channel, kernel_size, padding,
+                 kernel_size2=None, padding2=None, downsample=False, fused=False):
+        # fused is always true
+        super().__init__()
+        pad1, pad2 = padding, padding
+        if padding2 is not None:
+            pad2 = padding2
+        # kernel sizes
+        kernel1, kernel2 = kernel_size, kernel_size
+        if kernel_size2 is not None:
+            kernel2 = kernel_size2
+
+        self.conv1 = nn.Sequential(
+            EqualConv2d(in_channel, out_channel, kernel1, padding=pad1),
+            # leaky_relu is defined with an alpha of 0.2 in the original implementation
+            # https://github.com/NVlabs/stylegan/blob/03563d18a0cf8d67d897cc61e44479267968716b/training/networks_stylegan.py#L223
+            nn.LeakyReLU(0.2),
+        )
+
+        # https://github.com/NVlabs/stylegan/blob/03563d18a0cf8d67d897cc61e44479267968716b/training/networks_stylegan.py#L196
+        # https://github.com/NVlabs/stylegan/blob/03563d18a0cf8d67d897cc61e44479267968716b/training/networks_stylegan.py#L177
+        # In the Generator:
+        # if fused_scale is auto, we perform the fused operation if the resolution
+        # is larger than 64, else we do the operation separately
+        # In the Discriminator we perform fused downsampling if the resolution
+        # is larger than, or equal to 64
+        if downsample:
+            if fused:
+                self.conv2 = nn.Sequential(
+                    Blur(out_channel),
+                    FusedDownsample(out_channel, out_channel, kernel2, padding = pad2),
+                    nn.LeakyReLU(0.2)
+                )
+            else:
+                self.conv2 = nn.Sequential(
+                    Blur(out_channel),
+                    EqualConv2d(out_channel, out_channel, kernel2, padding = pad2),
+                    # the original implementation uses average pooling here
+                    # https://github.com/NVlabs/stylegan/blob/03563d18a0cf8d67d897cc61e44479267968716b/training/networks_progan.py#L107
+                    # with a kernel of [1, 1, 2, 2]
+                    # https://pytorch.org/docs/stable/generated/torch.nn.AvgPool2d.html
+                    # nn.AvgPool2d only requires `2` as input because the images are squares
+                    nn.AvgPool2d(2),
+                    nn.LeakyReLU(0.2)
+                )
+        else:
+            self.conv2 = nn.Sequential(
+                EqualConv2d(out_channel, out_channel, kernel2, padding=pad2),
+                nn.LeakyReLU(0.2),
+            )
+
+    def forward(self, input):
+        # input => upsample => conv3x3
+        out = self.conv1(input)
+        out = self.conv2(out)
+        return out
+
+# print(x.shape)
+# convtest = ConvBlock(3, 3, 3, 1, downsample=False, fused=True)
+# out = convtest(x)
+# print(out.shape)
+#
+# convtest = ConvBlock(3,3,3,1, downsample=True, fused=True)
+# out = convtest(x)
+# print(out.shape) # torch.Size([1, 3, 64, 64])
+#
+# convtest = ConvBlock(3,3,3,1, downsample=True, fused=False)
+# out2 = convtest(x)
+# print(out.shape) # torch.Size([1, 3, 64, 64])
+#
+# torch.allclose(out, out2) # false
+
