@@ -9,6 +9,7 @@ from dataloader import dataloader
 from data_import import MultiResolutionDataset
 from torchvision import transforms
 # import torchvision.transforms.functional as visF
+from math import sqrt
 
 out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
 transform = transforms.Compose(
@@ -136,12 +137,12 @@ class FusedDownsample(nn.Module):
         return out
 
 # lets test if we return the correct shape
-downsamp = FusedDownsample(3,3,3,1)
-# we need to pad with 1 to obtain correct shape, else we downsample to 127x127
-print(test.shape)
-test2 = downsamp(test)
-print(test2.shape)
-display_tensor(test2)
+# downsamp = FusedDownsample(3,3,3,1)
+# # we need to pad with 1 to obtain correct shape, else we downsample to 127x127
+# print(test.shape)
+# test2 = downsamp(test)
+# print(test2.shape)
+# display_tensor(test2)
 # also seems to work, for proper testing we should probably initialize weights as 1
 
 # the apply_bias function in the original implementation is used for style modulation,
@@ -205,6 +206,35 @@ def equal_lr(module, name='weight'):
 
     return module
 
+# Wrappers for linear & conv layers with equal_lr applied to them
+# https://github.com/rosinality/style-based-gan-pytorch/blob/b01ffcdcbca6d8bcbc5eb402c5d8180f4921aae4/model.py#L182
+
+class EqualConv2d(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+        conv = nn.Conv2d(*args, **kwargs)
+        conv.weight.data.normal_()
+        conv.bias.data.zero_()
+        self.conv = equal_lr(conv)
+
+    def forward(self, input):
+        return self.conv(input)
+
+
+class EqualLinear(nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super().__init__()
+
+        linear = nn.Linear(in_dim, out_dim)
+        linear.weight.data.normal_()
+        linear.bias.data.zero_()
+
+        self.linear = equal_lr(linear)
+
+    def forward(self, input):
+        return self.linear(input)
+
 # leaky_relu https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L223
 # has already been implemented for us in torch.nn.functional
 
@@ -228,3 +258,85 @@ class PixelNorm(nn.Module):
 
 # instance_norm
 # https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L247
+# already implemented in nn.InstanceNorm2d
+# https://pytorch.org/docs/stable/generated/torch.nn.InstanceNorm2d.html
+
+# Adaptive Instance Normalization
+class AdaptiveInstanceNorm(nn.Module):
+    def __init__(self, in_channel, style_dim):
+        super().__init__()
+        # normalize inputs
+        self.norm = nn.InstanceNorm2d(in_channel)
+        self.style = EqualLinear(style_dim, in_channel * 2)
+        # style inputs are just two vectors => More efficient to store it in one
+        # bias vector that will be split in two and updated in chunks
+        self.style.linear.bias.data[:in_channel] = 1
+        self.style.linear.bias.data[in_channel:] = 0
+
+    def forward(self, input, style):
+        # convert to linear vector and split in two parts
+        style = self.style(style).unsqueeze(2).unsqueeze(3)
+        gamma, beta = style.chunk(2, 1)
+
+        # get instance normalized input
+        out = self.norm(input)
+        # multiply by gain and add style bias beta
+        # as in 5. of https://arxiv.org/pdf/1703.06868.pdf
+        out = gamma * out + beta
+
+        return out
+
+# Style Modulation is performed at the end of every layer
+# the original implementation applies the style vector bias to the respective feature maps
+# of the input. This is equivalent with the lrequalized AdaIn defined above.
+
+# apply_noise
+# https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L270
+class NoiseInjection(nn.Module):
+    def __init__(self, channel):
+        super().__init__()
+        # batch, channel, height, width
+        # here they add the option to randomize noise inputs,
+        # we want noise parameters to be learnable though
+        # "Single-Channel images consisting of uncorrelated Gaussian noise
+        # [...] broadcasted to all feature maps using learned per feature scaling
+        # factors, [...] added to the output of the corresponding conv."
+        # End of 2. in https://arxiv.org/pdf/1812.04948.pdf
+        # here the actual noise generation is decoupled from the noise application
+        # weight parameter to scale noise, more flexible than having to obtain
+        # shapes of input like in original implementation
+        self.w = nn.Parameter(torch.zeros(1, channel, 1, 1))
+
+    def forward(self, input, noise):
+        assert len(input.shape) == 4
+        return input + self.w + noise
+
+# test = ApplyNoise(3)
+# out = test(x, noise = 0)
+# print(torch.equal(x, out))
+# print(out.shape)
+# seems to work as expected => Noise input shape depends on the stage of training
+# so we need to generate noise dependent on the training progress.
+
+# the generator starts from a learnable constant input
+# the original implementation initializes the learnable constant as such :
+# def nf(stage): return min(int(fmap_base / (2.0 ** (stage * fmap_decay))), fmap_max)
+# where fmap_base = 8192, fmap_decay = 0.9, and fmap_max = 512
+# def nf(stage): return min(int(8192 / (2.0 ** (stage * 0.9))), 512)
+# nf(1) # 512
+# thus the constant layer is shaped like
+# batch, 512, 4,4
+# https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L507
+
+class ConstantInput(nn.Module):
+    def __init__(self, channel, size = 4):
+        super().__init__()
+        self.w = nn.Parameter(torch.randn(1, channel, size, size))
+    def forward(self, input):
+        # batch, 512, 4, 4
+        return self.w.repeat(input.shape[0], 1, 1, 1)
+
+# test = ConstantInput(nf(1))
+# out = test(x)
+# print(out.shape)
+# works as intended
