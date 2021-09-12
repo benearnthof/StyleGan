@@ -24,7 +24,7 @@ from data_import import MultiResolutionDataset
 from torchvision import transforms, utils
 from model import StyledGenerator, Discriminator
 import torch
-import tqdm
+from tqdm import tqdm
 import math
 from torch.nn import functional as F
 from torch import nn, optim
