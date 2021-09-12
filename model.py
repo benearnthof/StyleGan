@@ -12,20 +12,20 @@ from torchvision import transforms
 # import torchvision.transforms.functional as visF
 from math import sqrt
 
-out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
-transform = transforms.Compose(
-    [
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),  # data loader needs tensors, arrays etc.
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True),
-    ]
-)
-
-dataset = MultiResolutionDataset(out_path, transform=transform, resolution=128)
-
-loader = dataloader(dataset, 1, 128)
-x = next(loader)
-print(x.shape)
+# out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
+# transform = transforms.Compose(
+#     [
+#         transforms.RandomHorizontalFlip(),
+#         transforms.ToTensor(),  # data loader needs tensors, arrays etc.
+#         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True),
+#     ]
+# )
+#
+# dataset = MultiResolutionDataset(out_path, transform=transform, resolution=128)
+#
+# loader = dataloader(dataset, 1, 128)
+# x = next(loader)
+# print(x.shape)
 
 
 # 4 dimensional tensor: batch, channels, x, y
