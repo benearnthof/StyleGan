@@ -1,6 +1,6 @@
 # general notes and literature
 
-# todo: training loop
+# todo: other datasets
 # todo: interpolation => colab
 # todo: FID scores => colab
 # todo: wrap everything in parsable files for training through CLI
