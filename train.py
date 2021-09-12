@@ -34,16 +34,16 @@ import random
 import numpy as np
 from PIL import Image
 
-out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
-transform = transforms.Compose(
-    [
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),  # data loader needs tensors, arrays etc.
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True),
-    ]
-)
-
-dataset = MultiResolutionDataset(out_path, transform=transform, resolution=128)
+# out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
+# transform = transforms.Compose(
+#     [
+#         transforms.RandomHorizontalFlip(),
+#         transforms.ToTensor(),  # data loader needs tensors, arrays etc.
+#         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True),
+#     ]
+# )
+#
+# dataset = MultiResolutionDataset(out_path, transform=transform, resolution=128)
 
 # multi resolution data loader wrapper
 def sample_data(dataset, batch_size, image_size = 4):
