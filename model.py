@@ -501,7 +501,7 @@ class StyledConvBlock(nn.Module):
         # regular conv
         out = self.conv2(out)
         # add noise
-        out = self.noise2(out)
+        out = self.noise2(out, noise)
         # pass through activation function again
         out = self.lrelu2(out)
         # add style again
@@ -618,8 +618,7 @@ class StyledGenerator(nn.Module):
         self.style = nn.Sequential(*layers)
 
     def forward(self, input, noise=None, step=0, alpha=-1, mean_style=None,
-                style_weight=0, mixing_range=(-1, -1),
-    ):
+                style_weight=0, mixing_range=(-1, -1),):
         styles = []
         if type(input) not in (list, tuple):
             input = [input]
