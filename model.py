@@ -89,25 +89,25 @@ class Blur(nn.Module):
 class FusedUpsample(nn.Module):
     def __init__(self, in_channel, out_channel, kernel_size, padding=0):
         super().__init__()
-        w = torch.randn(in_channel, out_channel, kernel_size, kernel_size)
-        b = torch.zeros(out_channel)
+        weight = torch.randn(in_channel, out_channel, kernel_size, kernel_size)
+        bias = torch.zeros(out_channel)
         # get weight https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L135
         fan_in = kernel_size * kernel_size * in_channel
         he_std = np.sqrt(2) / np.sqrt(fan_in)  # He initialization
         self.multiplier = he_std
         # weight and bias are learnable parameters
-        self.w = nn.Parameter(w)
-        self.b = nn.Parameter(b)
+        self.weight = nn.Parameter(weight)
+        self.bias = nn.Parameter(bias)
         self.pad = padding
 
     def forward(self, input):
         # pad last 2 dimensions with 0 on each side => turn 1x1x3x3 to 1x1x5x5
-        w = F.pad(self.w * self.multiplier, [1, 1, 1, 1])
+        w = F.pad(self.weight * self.multiplier, [1, 1, 1, 1])
         # compare to https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L188
         # add weights element wise
         w = (w[:, :, 1:, 1:] + w[:, :, :-1, 1:] + w[:, :, 1:, :-1] + w[:, :, :-1, :-1]) * 0.25
         # original implementation performs "deconvolution" http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.232.4023&rep=rep1&type=pdf
-        out = F.conv_transpose2d(input, w, self.b, stride=2, padding=self.pad)
+        out = F.conv_transpose2d(input, w, self.bias, stride=2, padding=self.pad)
         return out
 
 
@@ -124,21 +124,21 @@ class FusedUpsample(nn.Module):
 class FusedDownsample(nn.Module):
     def __init__(self, in_channel, out_channel, kernel_size, padding=0):
         super().__init__()
-        w = torch.randn(out_channel, in_channel, kernel_size, kernel_size)
-        b = torch.zeros(out_channel)
+        weight = torch.randn(out_channel, in_channel, kernel_size, kernel_size)
+        bias = torch.zeros(out_channel)
         # get weight https://github.com/NVlabs/stylegan/blob/66813a32aac5045fcde72751522a0c0ba963f6f2/training/networks_stylegan.py#L135
         fan_in = kernel_size * kernel_size * in_channel
         he_std = np.sqrt(2) / np.sqrt(fan_in)  # He initialization
         self.multiplier = he_std
-        self.w = nn.Parameter(w)
-        self.b = nn.Parameter(b)
+        self.weight = nn.Parameter(weight)
+        self.bias = nn.Parameter(bias)
         self.pad = padding
 
     def forward(self, input):
-        w = F.pad(self.w * self.multiplier, [1, 1, 1, 1])
+        w = F.pad(self.weight * self.multiplier, [1, 1, 1, 1])
         w = (w[:, :, 1:, 1:] + w[:, :, :-1, 1:] + w[:, :, 1:, :-1] + w[:, :, :-1, :-1]) * 0.25
         # do a regular convolution with stride 2 to downsample
-        out = F.conv2d(input, w, self.b, stride=2, padding=self.pad)
+        out = F.conv2d(input, w, self.bias, stride=2, padding=self.pad)
         return out
 
 
@@ -315,11 +315,11 @@ class NoiseInjection(nn.Module):
         # here the actual noise generation is decoupled from the noise application
         # weight parameter to scale noise, more flexible than having to obtain
         # shapes of input like in original implementation
-        self.w = nn.Parameter(torch.zeros(1, channel, 1, 1))
+        self.weight = nn.Parameter(torch.zeros(1, channel, 1, 1))
 
     def forward(self, input, noise):
         assert len(input.shape) == 4
-        return input + self.w + noise
+        return input + self.weight + noise
 
 
 # test = ApplyNoise(3)
@@ -342,11 +342,11 @@ class NoiseInjection(nn.Module):
 class ConstantInput(nn.Module):
     def __init__(self, channel, size=4):
         super().__init__()
-        self.w = nn.Parameter(torch.randn(1, channel, size, size))
+        self.weight = nn.Parameter(torch.randn(1, channel, size, size))
 
     def forward(self, input):
         # batch, 512, 4, 4
-        return self.w.repeat(input.shape[0], 1, 1, 1)
+        return self.weight.repeat(input.shape[0], 1, 1, 1)
 
 
 # test = ConstantInput(nf(1))
@@ -519,8 +519,12 @@ class Generator(nn.Module):
         self.progression = nn.ModuleList(
             # 512x4x4 constant input
             # as we keep on upsampling we decrease number of channels
+
             [
-                StyledConvBlock(512, 512, 3, 1, initial=True),
+                StyledConvBlock(512, 512, 3, 1, initial=True), #4x4
+                # exact replication of the feature map counts in
+                # progressive growing of GANs https://arxiv.org/pdf/1710.10196.pdf
+                # Table 2
                 StyledConvBlock(512, 512, 3, 1, upsample=True),  # 8 fused = false
                 StyledConvBlock(512, 512, 3, 1, upsample=True),  # 16
                 StyledConvBlock(512, 512, 3, 1, upsample=True),  # 32
@@ -529,12 +533,12 @@ class Generator(nn.Module):
                 StyledConvBlock(128, 64, 3, 1, upsample=True, fused=fused),
                 StyledConvBlock(64, 32, 3, 1, upsample=True, fused=fused),
                 StyledConvBlock(32, 16, 3, 1, upsample=True, fused=fused),
-
+                # every StyledConvBlock Performs Upsampling & Two convolutions
             ]
         )
 
         self.to_rgb = nn.ModuleList(
-            # to rgb => convolution with n input channels and 3 output channels
+            # to rgb => 1x1 convolution with n input channels and 3 output channels
             [
                 EqualConv2d(512, 3, 1),
                 EqualConv2d(512, 3, 1),
@@ -551,19 +555,18 @@ class Generator(nn.Module):
     def forward(self, style, noise, step=0, alpha=-1, mixing_range=(-1, -1)):
         out = noise[0]
 
-        if len(style) < 2:
-            inject_index = [len(self.progression) + 1]
+        if len(style) < 2: # only one style vector => no mixing
+            inject_index = [len(self.progression) + 1] # 10
 
-        else:
+        else: # obtain random sample for style mixing
             inject_index = sorted(
                 random.sample(list(range(step)), len(style) - 1))
 
         crossover = 0
-
+        # loop over module list of upscaling & to_rgb layers
         for i, (conv, to_rgb) in enumerate(zip(self.progression, self.to_rgb)):
             if mixing_range == (-1, -1):
-                if crossover < len(inject_index) and i > inject_index[
-                    crossover]:
+                if crossover < len(inject_index) and i > inject_index[crossover]:
                     crossover = min(crossover + 1, len(style))
 
                 style_step = style[crossover]
@@ -576,15 +579,17 @@ class Generator(nn.Module):
                     style_step = style[0]
 
             if i > 0 and step > 0:
+                # out starts off as just the first noise input
                 out_prev = out
-
+            # StyledConvLayer takes input, style and noise as inputs
             out = conv(out, style_step, noise[i])
 
-            if i == step:
+            if i == step: # last layer currently training
                 out = to_rgb(out)
-
+                # slowly fade in the next higher resolution layer while training
                 if i > 0 and 0 <= alpha < 1:
                     skip_rgb = self.to_rgb[i - 1](out_prev)
+                    # nearest neighbor interpolation instead of bilinear upsampling
                     skip_rgb = F.interpolate(skip_rgb, scale_factor=2,
                                              mode='nearest')
                     out = (1 - alpha) * skip_rgb + alpha * out
@@ -595,27 +600,25 @@ class Generator(nn.Module):
 
 
 class StyledGenerator(nn.Module):
+    # the actual styled generator is already defined above,
+    # this class just serves as a wrapper to help with the mapping network,
+    # calculating the style vector and noise to be added to the generator
     def __init__(self, code_dim=512, n_mlp=8):
         super().__init__()
-
+        # code dim is set to 512 as per the details in Section C of the paper
         self.generator = Generator(code_dim)
-
+        # the mapping network input is normalized with pixelnorm
         layers = [PixelNorm()]
         for i in range(n_mlp):
+            # mapping network of 8 fully connected layers
+            # all layers are learning rate equalized
             layers.append(EqualLinear(code_dim, code_dim))
             layers.append(nn.LeakyReLU(0.2))
 
         self.style = nn.Sequential(*layers)
 
-    def forward(
-            self,
-            input,
-            noise=None,
-            step=0,
-            alpha=-1,
-            mean_style=None,
-            style_weight=0,
-            mixing_range=(-1, -1),
+    def forward(self, input, noise=None, step=0, alpha=-1, mean_style=None,
+                style_weight=0, mixing_range=(-1, -1),
     ):
         styles = []
         if type(input) not in (list, tuple):
@@ -623,17 +626,20 @@ class StyledGenerator(nn.Module):
 
         for i in input:
             styles.append(self.style(i))
-
+        # inputs to the generator with mixing regularization is always a list of
+        # two random vectors
         batch = input[0].shape[0]
 
         if noise is None:
             noise = []
-
+            # generate list of 1 channel noise in the progressively growing shape
+            # => variation in large features and fine details
             for i in range(step + 1):
                 size = 4 * 2 ** i
                 noise.append(
                     torch.randn(batch, 1, size, size, device=input[0].device))
 
+        # average over latent styles
         if mean_style is not None:
             styles_norm = []
 
@@ -655,7 +661,7 @@ class StyledGenerator(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, fused=True, from_rgb_activate=False):
         super().__init__()
-
+        # again exact specification as in the original progressive growing paper
         self.progression = nn.ModuleList(
             [
                 ConvBlock(16, 32, 3, 1, downsample=True, fused=fused),  # 512
@@ -669,7 +675,7 @@ class Discriminator(nn.Module):
                 ConvBlock(513, 512, 3, 1, 4, 0),
             ]
         )
-
+        # 1x1 convolution to convert from 3 channel to n channel image
         def make_from_rgb(out_channel):
             if from_rgb_activate:
                 return nn.Sequential(EqualConv2d(3, out_channel, 1),
@@ -692,17 +698,17 @@ class Discriminator(nn.Module):
             ]
         )
 
-        # self.blur = Blur()
-
         self.n_layer = len(self.progression)
-
+        # final output => LR equalized linear layer for loss etc.
         self.linear = EqualLinear(512, 1)
 
     def forward(self, input, step=0, alpha=-1):
+        # exact mirror of generator
         for i in range(step, -1, -1):
             index = self.n_layer - i - 1
 
             if i == step:
+                # from_rgb for last step
                 out = self.from_rgb[index](input)
 
             if i == 0:
@@ -721,7 +727,6 @@ class Discriminator(nn.Module):
                     out = (1 - alpha) * skip_rgb + alpha * out
 
         out = out.squeeze(2).squeeze(2)
-        # print(input.size(), out.size(), step)
         out = self.linear(out)
 
         return out
