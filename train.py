@@ -28,9 +28,11 @@ import tqdm
 import math
 from torch.nn import functional as F
 from torch import nn, optim
-from torch.autograd import grad
+from torch.autograd import grad, Variable
 import argparse
 import random
+import numpy as np
+from PIL import Image
 
 out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
 transform = transforms.Compose(
