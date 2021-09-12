@@ -1,7 +1,5 @@
 # general notes and literature
 
-# todo: generator
-# todo: discriminator
 # todo: training loop
 # todo: interpolation => colab
 # todo: FID scores => colab
