@@ -1,11 +1,11 @@
 # general notes and literature
 
-# todo: other datasets
 # todo: interpolation => colab
 # todo: FID scores => colab
 # todo: wrap everything in parsable files for training through CLI
 # todo: tests
 # todo: requirements.txt
+# todo: sg2 generator
 
 # todo: rerun training & finalize writeup
 
