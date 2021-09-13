@@ -6,11 +6,9 @@ import lmdb
 from torchvision.datasets import ImageFolder
 from tqdm import tqdm
 # from math import frexp
+import argparse
 
 # img_path = "C:/Users/Bene/PycharmProjects/StyleGAN/dataset_corgis/corgis_25k/5h8XwMyMdr.jpeg"
-
-dataset_path = "D:/Downloads/crop1024/"
-out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
 
 
 # function to convert pixel number inputs to their corresponding powers of 2
@@ -88,10 +86,32 @@ def to_lmdb(transaction, dataset, max_size=128, min_size=8):
 
     transaction.put('length'.encode('utf-8'), str(total).encode('utf-8'))
 
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Converting .jpg folder to lmdb'
+                                                 'database.')
+    parser.add_argument('--dataset_path', type=str, help='path to imagefolder')
+    parser.add_argument('--out_path', type=str, help='path for output')
+    parser.add_argument('--max_size', type=int, default=128, help='maximum image')
+    parser.add_argument('--min_size', type=int, default=8, help='minimum image size')
+    parser.add_argument('--magic_number', type=int, default=17, help='constant required for setting the data base size on windows machines')
 
-dataset = ImageFolder(root=dataset_path)
-maxsize = 128
-minsize = 8
+    args = parser.parse_args()
+
+    dataset = ImageFolder(root=args.dataset_path)
+    mapsize = (args.max_size ** 4) * args.magic_number
+
+    with lmdb.open(path=args.out_path, map_size=mapsize, readahead=False) as env:
+        with env.begin(write=True) as txn:
+            to_lmdb(txn, dataset, args.max_size, args.min_size)
+
+# dataset_path = "D:/Downloads/crop1024/"
+# out_path = "C:/Users/Bene/PycharmProjects/StyleGAN/lmdb_corgis/"
+
+
+#
+# dataset = ImageFolder(root=dataset_path)
+# maxsize = 128
+# minsize = 8
 # how to adjust the needed size of the database dynamically?
 # trial and error: starting off with 25k images and a map_size of
 # 128 ** 4 * 3 leads to 24958 elements being written.
@@ -99,9 +119,6 @@ minsize = 8
 # 128 ** 4 * (137000 / (24950/3)) = 128 ** 4 ** 17
 
 # needs to be adjusted relative to the original data set size.
-mapsize = (maxsize ** 4) * 17 # black magic
+# mapsize = (maxsize ** 4) * 17 # black magic
 # the final database will require about 4.5 GB of disk space
 
-with lmdb.open(path=out_path, map_size=mapsize, readahead=False) as env:
-    with env.begin(write=True) as txn:
-        to_lmdb(txn, dataset, maxsize, minsize)
