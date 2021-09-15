@@ -1,13 +1,9 @@
 # general notes and literature
 
-# todo: interpolation => colab
-# todo: FID scores => colab
-# todo: wrap everything in parsable files for training through CLI
-# todo: tests
 # todo: requirements.txt
-# todo: sg2 generator
+# todo: data to google drive
 
-# todo: rerun training & finalize writeup
+# finalize writeup
 
 # making convolutional networks shift invariant again https://arxiv.org/abs/1904.11486
 # progressive growing of GANs https://arxiv.org/pdf/1710.10196.pdf
