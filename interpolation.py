@@ -12,8 +12,8 @@ import numpy as np
 if not os.path.isdir('/sample/'):
     os.mkdir('sample')
 
-if not os.path.isdir('/sg2/'):
-    os.mkdir('sg2')
+if not os.path.isdir('/sg/'):
+    os.mkdir('sg')
 
 # need args:
 # size
@@ -90,8 +90,8 @@ def gen_linterp_z(G, device, nsteps = 5, seeds = [0, 2], styledim = 512, truncat
 gen_linterp_z(G = G, device = "cuda", nsteps = 25)
 
 # filepaths
-fp_in = "/sg2/sample/*.png"
-fp_out = "/sg2/sample/linterp.gif"
+fp_in = "/sg/sample/*.png"
+fp_out = "/sg/sample/linterp.gif"
 
 # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#gif
 img, *imgs = [Image.open(f) for f in sorted(glob.glob(fp_in))]
@@ -143,14 +143,14 @@ def gen_linterp_w(G, device, nsteps = 5, seeds = [0, 2], styledim = 512, truncat
           normalize = True,
           range = (-1, 1),
       )
-if not os.path.isdir("/sg2/sample_w/"):
-    os.mkdir("/sg2/sample_w/")
+if not os.path.isdir("/sg/sample_w/"):
+    os.mkdir("/sg/sample_w/")
 
 gen_linterp_w(G = G, device = "cuda", nsteps = 25)
 
 # generate gif
-fp_in = "/content/sg2/sample_w/*.png"
-fp_out = "/content/sg2/sample_w/linterp_w.gif"
+fp_in = "/content/sg/sample_w/*.png"
+fp_out = "/content/sg/sample_w/linterp_w.gif"
 
 # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#gif
 img, *imgs = [Image.open(f) for f in sorted(glob.glob(fp_in))]
@@ -239,17 +239,17 @@ def gen_slerp_w(G, device, nsteps = 5, seeds = [0, 2], styledim = 512, truncatio
           range = (-1, 1),
       )
 
-if not os.path.exists("/sg2/sample_spherical/"):
-  os.mkdir("/sg2/sample_spherical/")
-if not os.path.exists("/sg2/sample_spherical_w/"):
-  os.mkdir("/sg2/sample_spherical_w/")
+if not os.path.exists("/sg/sample_spherical/"):
+  os.mkdir("/sg/sample_spherical/")
+if not os.path.exists("/sg/sample_spherical_w/"):
+  os.mkdir("/sg/sample_spherical_w/")
 
 gen_slerp_z(G = G, device = "cuda", nsteps = 25)
 gen_slerp_w(G = G, device = "cuda", nsteps = 25)
 
 # generate gif
-fp_in = "/sg2/sample_spherical/*.png"
-fp_out = "/sg2/sample_spherical/slerp.gif"
+fp_in = "/sg/sample_spherical/*.png"
+fp_out = "/sg/sample_spherical/slerp.gif"
 
 # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#gif
 img, *imgs = [Image.open(f) for f in sorted(glob.glob(fp_in))]
@@ -257,16 +257,16 @@ img.save(fp=fp_out, format='GIF', append_images=imgs,
          save_all=True, duration=200, loop=0)
 
 # generate gif (should probably wrap this in function at this point)
-fp_in = "/sg2/sample_spherical_w/*.png"
-fp_out = "/sg2/sample_spherical_w/slerp_w.gif"
+fp_in = "/sg/sample_spherical_w/*.png"
+fp_out = "/sg/sample_spherical_w/slerp_w.gif"
 
 # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#gif
 img, *imgs = [Image.open(f) for f in sorted(glob.glob(fp_in))]
 img.save(fp=fp_out, format='GIF', append_images=imgs,
          save_all=True, duration=200, loop=0)
 
-if not os.path.exists("/sg2/zippedfiles"):
-    os.mkdir("/sg2/zippedfiles")
+if not os.path.exists("/sg/zippedfiles"):
+    os.mkdir("/sg/zippedfiles")
 
 # function to combine multiple images
 def imgcombine(path):
@@ -287,10 +287,10 @@ def imgcombine(path):
 
   new_im.save(fp_out)
 
-imgcombine("/sg2/sample_spherical_w/")
-imgcombine("/sg2/sample_spherical/")
-imgcombine("/sg2/sample/")
-imgcombine("/sg2/sample_w/")
+imgcombine("/sg/sample_spherical_w/")
+imgcombine("/sg/sample_spherical/")
+imgcombine("/sg/sample/")
+imgcombine("/sg/sample_w/")
 
 # function to combine the combined images
 def imgcombine(path):
