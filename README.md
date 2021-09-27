@@ -1,7 +1,7 @@
 # StyleGan
 A pytorch implementation of Nvidias StyleGan for the class of Deep Unsupervised Learning at LMU Munich 2021
 
-To run training execute the file dataset.py first. For example: 
+To run training execute the file dataset.py first. For example:  
 !python dataset.py --dataset_path --out_path --max_size --min_size --magic_number
 dataset_path corresponds to the file path where the dataset is located.  
 Has to be of the structure of a torchvision imagefolder:  
